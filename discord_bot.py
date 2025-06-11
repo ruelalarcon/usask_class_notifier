@@ -136,7 +136,7 @@ async def help_command(ctx):
     embed = discord.Embed(
         title="🤖 Class Notifier Bot - Help",
         description="Monitor University of Saskatchewan class seat availability",
-        color=0x0099ff
+        color=0x0c6b41
     )
     
     embed.add_field(
@@ -287,7 +287,7 @@ async def status(ctx):
         await ctx.send("📋 No classes are currently being monitored in this server.")
         return
     
-    embed = discord.Embed(title="📚 Class Monitoring Status", color=0x00ff00)
+    embed = discord.Embed(title="📚 Class Monitoring Status", color=0x0c6b41)
     
     # Add notification channel info
     if notify_channel:
