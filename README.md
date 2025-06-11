@@ -17,8 +17,8 @@ A Discord bot that monitors University of Saskatchewan class seat availability a
    - Enable "Message Content Intent" in the bot settings
 
 3. **Configure the bot:**
-   - Replace `'YOUR_BOT_TOKEN'` in `config.py` with your actual bot token
-   - Update the `CLASS_REGISTRAR_COOKIES` in `config.py` as well
+   - Replace `'YOUR_BOT_TOKEN'` and `CLASS_REGISTRAR_COOKIES` in `config.py` with your actual bot token
+   - An example config file can be found in `config.py.example`
 
 4. **Invite bot to your server:**
    - Go to OAuth2 -> URL Generator

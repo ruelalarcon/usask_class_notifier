@@ -1,0 +1,7 @@
+BOT_TOKEN = ''
+
+CLASS_REGISTRAR_COOKIES = {
+    'JSESSIONID': '',
+    'BIGipServer~BannerXE~studentregistrationssb-pool': '',
+    'BIGipServer~BannerXE~BannerExtensibilityProd': '',
+}
