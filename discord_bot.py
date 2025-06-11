@@ -60,13 +60,6 @@ def save_data():
 def check_class_seats(subject: str, course_number: str, year: str, term: str, crn: str) -> int:
     """Check available seats for a specific class"""
     try:
-        # Keep JSESSIONID active
-        requests.get(
-            'https://banner.usask.ca/StudentRegistrationSsb/ssb/registration',
-            cookies=CLASS_REGISTRAR_COOKIES,
-            headers=HEADERS,
-        )
-
         params = {
             'txt_subject': subject,
             'txt_courseNumber': course_number,
@@ -327,6 +320,16 @@ async def status(ctx):
 async def seat_checker():
     """Background task to check seats every 20 seconds"""
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Checking seats...")
+    
+    # Keep JSESSIONID active
+    try:
+        requests.get(
+            'https://banner.usask.ca/StudentRegistrationSsb/ssb/registration',
+            cookies=CLASS_REGISTRAR_COOKIES,
+            headers=HEADERS,
+        )
+    except Exception as e:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Error keeping session active: {e}")
 
     for guild_id, guild_info in guild_data.items():
         # Get notification channel for this guild
