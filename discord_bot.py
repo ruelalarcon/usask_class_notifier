@@ -1,8 +1,11 @@
-import discord
-from discord.ext import commands, tasks
-import requests
 import json
+from datetime import datetime
 from typing import Dict
+
+import discord
+import requests
+from discord.ext import commands, tasks
+
 from config import BOT_TOKEN, CLASS_REGISTRAR_COOKIES
 
 # Program Constants
@@ -177,7 +180,7 @@ async def help_command(ctx):
     
     embed.add_field(
         name="📋 How it works",
-        value="• Bot checks all classes every 10 seconds\n"
+        value="• Bot checks all classes every 20 seconds\n"
               "• Notifications sent when seats go from 0 → available\n"
               "• Each Discord server has independent monitoring",
         inline=False
@@ -320,9 +323,11 @@ async def status(ctx):
     
     await ctx.send(embed=embed)
 
-@tasks.loop(seconds=10)
+@tasks.loop(seconds=20)
 async def seat_checker():
-    """Background task to check seats every 10 seconds"""
+    """Background task to check seats every 20 seconds"""
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Checking seats...")
+
     for guild_id, guild_info in guild_data.items():
         # Get notification channel for this guild
         notify_channel_id = guild_info.get('notify_channel_id')

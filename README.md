@@ -55,7 +55,7 @@ A Discord bot that monitors University of Saskatchewan class seat availability a
 
 ## Features
 
-- Checks all monitored classes every 10 seconds
+- Checks all monitored classes every 20 seconds
 - Sends notifications when seats become available (when count goes from 0 to >0)
 - Per-server class monitoring (classes are tracked separately for each Discord server)
 - Persistent data storage (survives bot restarts)
