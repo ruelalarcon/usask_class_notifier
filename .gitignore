@@ -1,0 +1,17 @@
+# Python environment
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pyzw
+
+# Environment config
+config.py
+
+# Bot data storage
+bot_data.json
