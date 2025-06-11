@@ -57,6 +57,13 @@ def save_data():
 def check_class_seats(subject: str, course_number: str, year: str, term: str, crn: str) -> int:
     """Check available seats for a specific class"""
     try:
+        # Keep JSESSIONID active
+        requests.get(
+            'https://banner.usask.ca/StudentRegistrationSsb/ssb/registration',
+            cookies=CLASS_REGISTRAR_COOKIES,
+            headers=HEADERS,
+        )
+
         params = {
             'txt_subject': subject,
             'txt_courseNumber': course_number,
