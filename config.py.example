@@ -1,8 +1,16 @@
+# Your discord bot's token
 BOT_TOKEN = ''
 
+# Your Cookies for the USASK banner registration website
 CLASS_REGISTRAR_COOKIES = {
     'JSESSIONID': '',
     'BIGipServer~BannerXE~studentregistrationssb-pool': '',
     'BIGipServer~BannerXE~BannerExtensibilityProd': '',
     'BIGipServer~BannerXE~applicationNavigatorProd': '',
 }
+
+# List of Discord user IDs that can use developer commands
+DEVELOPERS = [
+    # 123456789012345678,  # Your Discord user ID
+    # 987654321098765432,  # Another developer's Discord user ID
+]

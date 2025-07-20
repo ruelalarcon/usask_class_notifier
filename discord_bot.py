@@ -7,7 +7,7 @@ import discord
 import requests
 from discord.ext import commands, tasks
 
-from config import BOT_TOKEN, CLASS_REGISTRAR_COOKIES
+from config import BOT_TOKEN, CLASS_REGISTRAR_COOKIES, DEVELOPERS
 
 # Program Constants
 TERMS = {
@@ -44,8 +44,9 @@ last_cookie_refresh = 0
 
 def initialize_session():
     """Initialize the session with the provided cookies"""
-    global session
+    global session, last_cookie_refresh
     session.cookies.update(CLASS_REGISTRAR_COOKIES)
+    last_cookie_refresh = time.time()
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Session initialized with cookies: {list(session.cookies.keys())}")
 
 def refresh_session_cookies():
@@ -179,6 +180,28 @@ bot = commands.Bot(command_prefix='cn!', intents=intents, help_command=None)
 # Data storage: guild_id -> {crn -> {class_info, users_to_notify, last_available_seats}, notify_channel_id -> channel_id}
 guild_data: Dict[int, Dict[str, Dict]] = {}
 
+def is_developer():
+    """Custom check to verify if user is in the DEVELOPERS list"""
+    def predicate(ctx):
+        if not DEVELOPERS:
+            # If no developers are configured, allow the first user to set themselves up
+            return True
+        return ctx.author.id in DEVELOPERS
+    return commands.check(predicate)
+
+def is_admin_or_developer():
+    """Custom check for server admins (owner/manage server) OR config.py developers"""
+    def predicate(ctx):
+        # Check if user is a developer (config.py DEVELOPERS)
+        if ctx.author.id in DEVELOPERS:
+            return True
+        # Check if user is server owner
+        if ctx.author.id == ctx.guild.owner_id:
+            return True
+        # Check if user has server admin permissions
+        return ctx.author.guild_permissions.administrator
+    return commands.check(predicate)
+
 def load_data():
     """Load persistent data from file"""
     global guild_data
@@ -290,7 +313,7 @@ async def help_command(ctx):
         name="cn!setchannel [#channel]",
         value="**REQUIRED FIRST STEP**: Set notification channel\n"
               "• If no channel specified, uses current channel\n"
-              "• Requires 'Manage Channels' permission\n"
+              "• Server admins or developers only\n"
               "• Example: `cn!setchannel #class-alerts`",
         inline=False
     )
@@ -327,17 +350,17 @@ async def help_command(ctx):
 
     embed.add_field(
         name="cn!cookies",
-        value="Show session cookie status (Admin only)\n"
-              "• Shows active cookies and refresh times\n"
-              "• Requires 'Manage Channels' permission",
+        value="Show session cookie status (Developers only)\n"
+              "• Tells you which cookies are active and when they were last refreshed\n"
+              "• Developers only (defined in config.py)",
         inline=False
     )
 
     embed.add_field(
         name="cn!refresh",
-        value="Manually refresh session cookies (Admin only)\n"
+        value="Manually refresh session cookies (Developers only)\n"
               "• Forces immediate cookie refresh\n"
-              "• Requires 'Manage Channels' permission",
+              "• Developers only (defined in config.py)",
         inline=False
     )
 
@@ -405,7 +428,7 @@ async def remove_class(ctx, crn: str):
     await ctx.send(f"✅ Removed {class_info['subject']} {class_info['course_number']} (CRN: {crn}) from monitoring.")
 
 @bot.command(name='setchannel')
-@commands.has_permissions(manage_channels=True)
+@is_admin_or_developer()
 async def set_notify_channel(ctx, channel: discord.TextChannel = None):
     """Set the channel where seat availability notifications will be sent"""
     guild_id = ctx.guild.id
@@ -424,10 +447,17 @@ async def set_notify_channel(ctx, channel: discord.TextChannel = None):
 
     await ctx.send(f"✅ Notification channel set to {channel.mention}. All seat availability notifications will be sent here.")
 
-@set_notify_channel.error
-async def set_notify_channel_error(ctx, error):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send("❌ You need the 'Manage Channels' permission to set the notification channel.")
+@bot.event
+async def on_command_error(ctx, error):
+    """Global error handler for commands"""
+    if isinstance(error, commands.CheckFailure):
+        await ctx.send("❌ You need proper permissions to use this command. Server admins can use `cn!setchannel`, developers (defined in config.py) can use other admin commands.")
+    elif isinstance(error, commands.CommandNotFound):
+        # Silently ignore unknown commands
+        pass
+    else:
+        # For other errors, you might want to log them or handle them differently
+        print(f"Command error in {ctx.command}: {error}")
 
 @bot.command(name='status')
 async def status(ctx):
@@ -488,7 +518,7 @@ async def status(ctx):
     await ctx.send(embed=embed)
 
 @bot.command(name='cookies')
-@commands.has_permissions(manage_channels=True)
+@is_developer()
 async def cookie_status(ctx):
     """Show current cookie status and allow manual refresh"""
     global session, last_cookie_refresh
@@ -521,12 +551,19 @@ async def cookie_status(ctx):
         )
 
     # Show next scheduled refresh
-    next_refresh = datetime.fromtimestamp(last_cookie_refresh + COOKIE_REFRESH_INTERVAL)
-    embed.add_field(
-        name="Next Auto-Refresh",
-        value=f"{next_refresh.strftime('%Y-%m-%d %H:%M:%S')}",
-        inline=True
-    )
+    if last_cookie_refresh > 0:
+        next_refresh = datetime.fromtimestamp(last_cookie_refresh + COOKIE_REFRESH_INTERVAL)
+        embed.add_field(
+            name="Next Auto-Refresh",
+            value=f"{next_refresh.strftime('%Y-%m-%d %H:%M:%S')}",
+            inline=True
+        )
+    else:
+        embed.add_field(
+            name="Next Auto-Refresh",
+            value="Will refresh on first API call",
+            inline=True
+        )
 
     embed.add_field(
         name="Manual Refresh",
@@ -537,7 +574,7 @@ async def cookie_status(ctx):
     await ctx.send(embed=embed)
 
 @bot.command(name='refresh')
-@commands.has_permissions(manage_channels=True)
+@is_developer()
 async def manual_refresh(ctx):
     """Manually refresh session cookies"""
     await ctx.send("🔄 Attempting to refresh cookies...")
@@ -594,6 +631,10 @@ async def seat_checker():
 
                 # Update last known seat count only if we got a valid response
                 class_info['last_available_seats'] = available_seats
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Updated seats for {crn}: {previous_seats} -> {available_seats}")
+
+                # Save data immediately after updating seat count to ensure persistence
+                save_data()
 
                 # Improved notification logic: only notify if we have a valid previous state
                 # and seats went from 0 to >0 (not on first check when previous_seats is None)
@@ -641,12 +682,6 @@ async def seat_checker():
             except Exception as e:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Error processing class {crn}: {e}")
                 # Continue processing other classes even if one fails
-
-    # Save data periodically
-    try:
-        save_data()
-    except Exception as e:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Error saving data: {e}")
 
 @seat_checker.before_loop
 async def before_seat_checker():

@@ -18,6 +18,7 @@ A Discord bot that monitors University of Saskatchewan class seat availability a
 
 3. **Configure the bot:**
    - Replace `'YOUR_BOT_TOKEN'` and `CLASS_REGISTRAR_COOKIES` in `config.py` with your actual bot token
+   - Add your Discord user ID to the `DEVELOPERS` list in `config.py` to use developer commands
    - An example config file can be found in `config.py.example`
 
 4. **Invite bot to your server:**
@@ -38,7 +39,7 @@ A Discord bot that monitors University of Saskatchewan class seat availability a
 - `cn!setchannel [#channel]`
   - **REQUIRED FIRST STEP**: Sets the channel where seat availability notifications will be sent
   - If no channel is specified, uses the current channel
-  - Requires "Manage Channels" permission
+  - Server admins or developers only
   - Example: `cn!setchannel #class-alerts` or `cn!setchannel` (uses current channel)
 
 - `cn!add CRN SUBJECT COURSE_NUMBER YEAR TERM`
@@ -53,6 +54,14 @@ A Discord bot that monitors University of Saskatchewan class seat availability a
   - Shows seat counts for all monitored classes in the server
   - Also shows which channel is set for notifications
 
+- `cn!cookies` (Developers only)
+  - Shows session cookie status and refresh times
+  - Developers only (user ID must be in DEVELOPERS list in config.py)
+
+- `cn!refresh` (Developers only)
+  - Manually refresh session cookies
+  - Developers only (user ID must be in DEVELOPERS list in config.py)
+
 ## Features
 
 - Checks all monitored classes every 20 seconds
@@ -60,6 +69,8 @@ A Discord bot that monitors University of Saskatchewan class seat availability a
 - Per-server class monitoring (classes are tracked separately for each Discord server)
 - Persistent data storage (survives bot restarts)
 - Multiple users can monitor the same class
+- Automatic session cookie refresh every 5 minutes
+- Robust error handling and logging
 
 ## Valid Terms
 
@@ -71,7 +82,9 @@ A Discord bot that monitors University of Saskatchewan class seat availability a
 ## Notes
 
 - The bot uses the University of Saskatchewan's Banner system
-- You may need to update the cookies periodically as they expire
 - **You must run `cn!setchannel` first** before the bot can send any notifications
-- Only users with "Manage Channels" permission can set the notification channel
+- Only users in the DEVELOPERS list (defined in config.py) can use developer commands
+- Session cookies are automatically refreshed every 5 minutes to maintain connectivity
+- All bot data including cookies are saved in `bot_data.json`
 - All commands use the prefix `cn!`
+- To find your Discord user ID: Enable Developer Mode in Discord settings, then right-click your username and select "Copy ID"
