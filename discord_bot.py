@@ -339,48 +339,89 @@ async def seat_checker():
 
         notify_channel = bot.get_channel(notify_channel_id)
         if not notify_channel:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Warning: Notification channel {notify_channel_id} not found for guild {guild_id}")
             continue  # Skip if channel no longer exists
 
         # Filter out non-class data (like notify_channel_id)
         classes = {crn: info for crn, info in guild_info.items() if crn != 'notify_channel_id'}
 
         for crn, class_info in classes.items():
-            # Check available seats
-            available_seats = check_class_seats(
-                class_info['subject'],
-                class_info['course_number'],
-                class_info['year'],
-                class_info['term'],
-                crn
-            )
+            try:
+                # Check available seats
+                available_seats = check_class_seats(
+                    class_info['subject'],
+                    class_info['course_number'],
+                    class_info['year'],
+                    class_info['term'],
+                    crn
+                )
 
-            # Update last known seat count
-            previous_seats = class_info.get('last_available_seats')
-            class_info['last_available_seats'] = available_seats
+                # Get previous seat count
+                previous_seats = class_info.get('last_available_seats')
 
-            # If seats became available (changed from 0 to >0), notify users
-            if available_seats > 0 and (previous_seats == 0 or previous_seats is None):
-                # Create notification message
-                user_mentions = []
-                for user_id in class_info['users_to_notify']:
-                    user = bot.get_user(user_id)
-                    if user:
-                        user_mentions.append(user.mention)
+                # Handle API errors
+                if available_seats == -1:
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Warning: Class {crn} not found in search results")
+                    continue  # Don't update seat count if class not found
+                elif available_seats == -2:
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Error: Failed to check seats for {crn}")
+                    continue  # Don't update seat count if request failed
 
-                if user_mentions:
-                    embed = discord.Embed(
-                        title="🎉 Seats Available!",
-                        description=f"**{class_info['subject']} {class_info['course_number']}** (CRN: {crn})",
-                        color=0x0c6b41
-                    )
-                    embed.add_field(name="Available Seats", value=str(available_seats), inline=True)
-                    embed.add_field(name="Term", value=f"{class_info['term']} {class_info['year']}", inline=True)
+                # Update last known seat count only if we got a valid response
+                class_info['last_available_seats'] = available_seats
 
-                    mentions_text = " ".join(user_mentions)
-                    await notify_channel.send(content=mentions_text, embed=embed)
+                # Improved notification logic: only notify if we have a valid previous state
+                # and seats went from 0 to >0 (not on first check when previous_seats is None)
+                should_notify = (
+                    available_seats > 0 and
+                    previous_seats is not None and
+                    previous_seats == 0
+                )
+
+                if should_notify:
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Seats became available for {crn}! ({previous_seats} -> {available_seats})")
+
+                    # Create notification message
+                    user_mentions = []
+                    for user_id in class_info['users_to_notify']:
+                        user = bot.get_user(user_id)
+                        if user:
+                            user_mentions.append(user.mention)
+                        else:
+                            print(f"[{datetime.now().strftime('%H:%M:%S')}] Warning: Could not find user {user_id}")
+
+                    if user_mentions:
+                        try:
+                            embed = discord.Embed(
+                                title="🎉 Seats Available!",
+                                description=f"**{class_info['subject']} {class_info['course_number']}** (CRN: {crn})",
+                                color=0x0c6b41
+                            )
+                            embed.add_field(name="Available Seats", value=str(available_seats), inline=True)
+                            embed.add_field(name="Term", value=f"{class_info['term']} {class_info['year']}", inline=True)
+
+                            mentions_text = " ".join(user_mentions)
+                            await notify_channel.send(content=mentions_text, embed=embed)
+                            print(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully sent notification for {crn} to {len(user_mentions)} users")
+
+                        except discord.Forbidden:
+                            print(f"[{datetime.now().strftime('%H:%M:%S')}] Error: Bot lacks permission to send messages in channel {notify_channel.name}")
+                        except discord.HTTPException as e:
+                            print(f"[{datetime.now().strftime('%H:%M:%S')}] Error sending notification: {e}")
+                        except Exception as e:
+                            print(f"[{datetime.now().strftime('%H:%M:%S')}] Unexpected error sending notification for {crn}: {e}")
+                    else:
+                        print(f"[{datetime.now().strftime('%H:%M:%S')}] Warning: No valid users to notify for {crn}")
+
+            except Exception as e:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Error processing class {crn}: {e}")
+                # Continue processing other classes even if one fails
 
     # Save data periodically
-    save_data()
+    try:
+        save_data()
+    except Exception as e:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Error saving data: {e}")
 
 @seat_checker.before_loop
 async def before_seat_checker():
