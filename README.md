@@ -74,4 +74,4 @@ A Discord bot that monitors University of Saskatchewan class seat availability a
 - You may need to update the cookies periodically as they expire
 - **You must run `cn!setchannel` first** before the bot can send any notifications
 - Only users with "Manage Channels" permission can set the notification channel
-- All commands use the prefix `cn!` 
+- All commands use the prefix `cn!`
