@@ -313,8 +313,6 @@ def save_data():
         with open('bot_data.json', 'w') as f:
             json.dump(data, f, indent=2)
 
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully saved {len(data['cookies'])} cookies to bot_data.json")
-
     except Exception as e:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Error in save_data: {e}")
         print_exc()
@@ -716,8 +714,6 @@ async def seat_checker():
                 # Update last known seat count only if we got a valid response
                 class_info['last_available_seats'] = available_seats
 
-                # Save data immediately after updating seat count to ensure persistence
-                save_data()
 
                 # Improved notification logic: only notify if we have a valid previous state
                 # and seats went from 0 to >0 (not on first check when previous_seats is None)
@@ -765,6 +761,9 @@ async def seat_checker():
             except Exception as e:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Error processing class {crn}: {e}")
                 # Continue processing other classes even if one fails
+
+    # Save data after all classes have been checked
+    save_data()
 
 @seat_checker.before_loop
 async def before_seat_checker():
