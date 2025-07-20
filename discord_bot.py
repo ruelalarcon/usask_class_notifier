@@ -97,7 +97,7 @@ def refresh_session_cookies():
     try:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Attempting to refresh session cookies...")
 
-                # Store original cookies for comparison
+        # Store original cookies for comparison
         original_cookies = dict(session.cookies)
 
         # Clear existing cookies to prevent duplicates
@@ -277,19 +277,12 @@ def load_data():
     try:
         with open('bot_data.json', 'r') as f:
             data = json.load(f)
+            guild_data = {int(k): v for k, v in data['guilds'].items()}
 
-            # Handle both old format (just guild_data) and new format (structured data)
-            if 'guilds' in data:
-                # New structured format
-                guild_data = {int(k): v for k, v in data['guilds'].items()}
-
-                # Load cookies if they exist
-                if 'cookies' in data:
-                    session.cookies.update(data['cookies'])
-                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Loaded {len(data['cookies'])} saved cookies")
-            else:
-                # Old format - just guild_data
-                guild_data = {int(k): v for k, v in data.items()}
+            # Load cookies if they exist
+            if 'cookies' in data:
+                session.cookies.update(data['cookies'])
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Loaded {len(data['cookies'])} saved cookies")
 
     except FileNotFoundError:
         guild_data = {}
@@ -319,21 +312,6 @@ def save_data():
 
         with open('bot_data.json', 'w') as f:
             json.dump(data, f, indent=2)
-
-        # Debug: Log how many classes have seat data
-        total_classes = 0
-        classes_with_seats = 0
-        for guild_id, guild_info in guild_data.items():
-            for key, value in guild_info.items():
-                if key != 'notify_channel_id' and isinstance(value, dict):
-                    total_classes += 1
-                    seat_count = value.get('last_available_seats')
-                    if seat_count is not None:
-                        classes_with_seats += 1
-                        print(f"[{datetime.now().strftime('%H:%M:%S')}] Class {key} has seat data: {seat_count}")
-
-        if total_classes > 0:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Saved data: {classes_with_seats}/{total_classes} classes have seat data")
 
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully saved {len(data['cookies'])} cookies to bot_data.json")
 
