@@ -1,6 +1,7 @@
 import json
 import time
 from datetime import datetime
+from traceback import print_exc
 from typing import Dict
 
 import discord
@@ -42,11 +43,51 @@ session = requests.Session()
 session.headers.update(HEADERS)
 last_cookie_refresh = 0
 
+def clean_duplicate_cookies():
+    """Remove duplicate cookies while keeping the most recent ones"""
+    global session
+
+    try:
+        # Get all cookies as a list
+        all_cookies = list(session.cookies)
+
+        # Check for duplicates
+        cookie_names = [cookie.name for cookie in all_cookies]
+        duplicates = [name for name in set(cookie_names) if cookie_names.count(name) > 1]
+
+        if duplicates:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Found duplicate cookies: {duplicates}")
+
+            # Create a new cookie jar with only unique cookies (keeping the last one of each name)
+            from requests.cookies import RequestsCookieJar
+            new_jar = RequestsCookieJar()
+
+            # Track which cookies we've seen to keep only the last occurrence
+            seen_cookies = {}
+
+            for cookie in all_cookies:
+                # Always update to keep the latest one
+                seen_cookies[cookie.name] = cookie
+
+            # Add unique cookies to new jar
+            for cookie_name, cookie in seen_cookies.items():
+                new_jar.set_cookie(cookie)
+
+            # Replace the session's cookie jar
+            session.cookies = new_jar
+
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] After cleanup: {list(session.cookies.keys())}")
+
+    except Exception as e:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Error cleaning duplicate cookies: {e}")
+        print_exc()
+
 def initialize_session():
     """Initialize the session with the provided cookies"""
     global session, last_cookie_refresh
     session.cookies.update(CLASS_REGISTRAR_COOKIES)
     last_cookie_refresh = time.time()
+    clean_duplicate_cookies()
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Session initialized with cookies: {list(session.cookies.keys())}")
 
 def refresh_session_cookies():
@@ -56,8 +97,26 @@ def refresh_session_cookies():
     try:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Attempting to refresh session cookies...")
 
-        # Store original cookies for comparison
+                # Store original cookies for comparison
         original_cookies = dict(session.cookies)
+
+        # Clear existing cookies to prevent duplicates
+        session.cookies.clear()
+
+        # Re-add the most recent saved cookies from bot_data.json, or fall back to config
+        try:
+            with open('bot_data.json', 'r') as f:
+                saved_data = json.load(f)
+                if 'cookies' in saved_data and saved_data['cookies']:
+                    session.cookies.update(saved_data['cookies'])
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Restored cookies from bot_data.json: {list(session.cookies.keys())}")
+                else:
+                    session.cookies.update(CLASS_REGISTRAR_COOKIES)
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] No saved cookies found, using config baseline: {list(session.cookies.keys())}")
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            # Fall back to config cookies if file doesn't exist or is corrupted
+            session.cookies.update(CLASS_REGISTRAR_COOKIES)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Error loading saved cookies, using config baseline: {list(session.cookies.keys())}")
 
         # This mimics clicking the "registration" link that you described
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Trying registration endpoint...")
@@ -114,6 +173,9 @@ def refresh_session_cookies():
             timeout=30
         )
 
+        # Clean any duplicate cookies that might have been created
+        clean_duplicate_cookies()
+
         # Check final cookie state
         final_cookies = dict(session.cookies)
         all_updated_cookies = {k: v for k, v in final_cookies.items()
@@ -146,7 +208,14 @@ def refresh_session_cookies():
 
     except Exception as e:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Error refreshing session cookies: {e}")
+        print_exc()
         return False
+    finally:
+        # Always ensure we clean duplicates even if there was an error
+        try:
+            clean_duplicate_cookies()
+        except Exception as cleanup_error:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Error in final cleanup: {cleanup_error}")
 
 def should_refresh_cookies():
     """Determine if cookies should be refreshed"""
@@ -227,13 +296,50 @@ def load_data():
 
 def save_data():
     """Save data to file"""
-    data = {
-        'guilds': guild_data,
-        'cookies': dict(session.cookies),
-        'last_updated': datetime.now().isoformat()
-    }
-    with open('bot_data.json', 'w') as f:
-        json.dump(data, f, indent=2)
+    try:
+        # Clean duplicates before saving to prevent CookieConflictError
+        clean_duplicate_cookies()
+
+        # Now safely convert cookies to dict
+        try:
+            cookies_dict = dict(session.cookies)
+        except Exception as cookie_error:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Error converting cookies to dict: {cookie_error}")
+            # Fall back to manual extraction if dict conversion fails
+            cookies_dict = {}
+            for cookie in session.cookies:
+                cookies_dict[cookie.name] = cookie.value
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Used fallback cookie extraction, got {len(cookies_dict)} cookies")
+
+        data = {
+            'guilds': guild_data,
+            'cookies': cookies_dict,
+            'last_updated': datetime.now().isoformat()
+        }
+
+        with open('bot_data.json', 'w') as f:
+            json.dump(data, f, indent=2)
+
+        # Debug: Log how many classes have seat data
+        total_classes = 0
+        classes_with_seats = 0
+        for guild_id, guild_info in guild_data.items():
+            for key, value in guild_info.items():
+                if key != 'notify_channel_id' and isinstance(value, dict):
+                    total_classes += 1
+                    seat_count = value.get('last_available_seats')
+                    if seat_count is not None:
+                        classes_with_seats += 1
+                        print(f"[{datetime.now().strftime('%H:%M:%S')}] Class {key} has seat data: {seat_count}")
+
+        if total_classes > 0:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Saved data: {classes_with_seats}/{total_classes} classes have seat data")
+
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully saved {len(data['cookies'])} cookies to bot_data.json")
+
+    except Exception as e:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Error in save_data: {e}")
+        print_exc()
 
 def check_class_seats(subject: str, course_number: str, year: str, term: str, crn: str) -> int:
     """Check available seats for a specific class"""
