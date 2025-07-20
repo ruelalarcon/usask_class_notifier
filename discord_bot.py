@@ -715,7 +715,6 @@ async def seat_checker():
 
                 # Update last known seat count only if we got a valid response
                 class_info['last_available_seats'] = available_seats
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] Updated seats for {crn}: {previous_seats} -> {available_seats}")
 
                 # Save data immediately after updating seat count to ensure persistence
                 save_data()
