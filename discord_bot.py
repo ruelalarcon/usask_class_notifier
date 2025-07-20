@@ -118,7 +118,7 @@ def refresh_session_cookies():
             session.cookies.update(CLASS_REGISTRAR_COOKIES)
             print(f"[{datetime.now().strftime('%H:%M:%S')}] Error loading saved cookies, using config baseline: {list(session.cookies.keys())}")
 
-        # This mimics clicking the "registration" link that you described
+        # This mimics clicking the "registration" link that occasionally sends SSO cookies 
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Trying registration endpoint...")
         registration_response = session.get(
             'https://banner.usask.ca/StudentRegistrationSsb/ssb/registration',
@@ -134,7 +134,7 @@ def refresh_session_cookies():
         if new_from_registration:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] Got new cookies from registration: {list(new_from_registration.keys())}")
 
-        # Try the main Banner entry point (potential SSO refresh)
+        # Try the main Banner entry point (also causes a potential SSO refresh)
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Trying main Banner entry point...")
         banner_response = session.get(
             'https://banner.usask.ca/StudentRegistrationSsb/',
@@ -142,7 +142,7 @@ def refresh_session_cookies():
             timeout=30
         )
 
-        # Try accessing the menu/home page that might trigger auth refresh
+        # Access the menu/home page to trigger auth refresh
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Trying Banner menu...")
         session.get(
             'https://banner.usask.ca/StudentRegistrationSsb/ssb/classRegistration/classRegistration',
@@ -150,7 +150,7 @@ def refresh_session_cookies():
             timeout=30
         )
 
-        # Try the term search endpoint which might refresh session
+        # Use an endpoint to refresh session
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Trying term search...")
         current_year = datetime.now().year
         current_month = datetime.now().month
