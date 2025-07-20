@@ -23,7 +23,7 @@ A Discord bot that monitors University of Saskatchewan class seat availability a
 
 4. **Invite bot to your server:**
    - Go to OAuth2 -> URL Generator
-   - Select "bot" scope and "Send Messages", "Read Message History", "Mention Everyone" permissions
+   - Select "bot" scope and "View Channels", "Send Messages", "Read Message History", "Mention Everyone" permissions
    - Use the generated URL to invite the bot to your server
 
 5. **Run the bot:**
