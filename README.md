@@ -1,6 +1,10 @@
 # Class Notifier Discord Bot
 
-A Discord bot that monitors University of Saskatchewan class seat availability and notifies users when seats become available.
+> A Discord bot that monitors University of Saskatchewan class seat availability and notifies users when seats become available.
+
+## Preview
+
+<img width="830" height="468" alt="image" src="https://github.com/user-attachments/assets/58874277-3e98-43ed-88d0-9b8572c0a281" />
 
 ## Setup
 
