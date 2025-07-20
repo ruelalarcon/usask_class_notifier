@@ -673,11 +673,6 @@ async def seat_checker():
     """Background task to check seats every 20 seconds"""
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Checking seats...")
 
-    # Periodic cookie refresh - refresh regardless of class activity
-    if should_refresh_cookies():
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Periodic cookie refresh needed (no API calls in {COOKIE_REFRESH_INTERVAL} seconds)")
-        refresh_session_cookies()
-
     for guild_id, guild_info in guild_data.items():
         # Get notification channel for this guild
         notify_channel_id = guild_info.get('notify_channel_id')
@@ -760,6 +755,11 @@ async def seat_checker():
             except Exception as e:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Error processing class {crn}: {e}")
                 # Continue processing other classes even if one fails
+
+    # Periodic cookie refresh - refresh regardless of class activity
+    if should_refresh_cookies():
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Periodic cookie refresh needed (no API calls in {COOKIE_REFRESH_INTERVAL} seconds)")
+        refresh_session_cookies()
 
     # Save data after all classes have been checked
     save_data()
