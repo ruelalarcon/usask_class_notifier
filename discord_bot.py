@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime
 from typing import Dict
 
@@ -33,6 +34,143 @@ HEADERS = {
     'sec-ch-ua-platform': '"Windows"',
 }
 
+
+COOKIE_REFRESH_INTERVAL = 300
+
+# Session management
+session = requests.Session()
+session.headers.update(HEADERS)
+last_cookie_refresh = 0
+
+def initialize_session():
+    """Initialize the session with the provided cookies"""
+    global session
+    session.cookies.update(CLASS_REGISTRAR_COOKIES)
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Session initialized with cookies: {list(session.cookies.keys())}")
+
+def refresh_session_cookies():
+    """Attempt to refresh session cookies using the redirect mechanism"""
+    global session, last_cookie_refresh
+
+    try:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Attempting to refresh session cookies...")
+
+        # Store original cookies for comparison
+        original_cookies = dict(session.cookies)
+
+        # This mimics clicking the "registration" link that you described
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Trying registration endpoint...")
+        registration_response = session.get(
+            'https://banner.usask.ca/StudentRegistrationSsb/ssb/registration',
+            allow_redirects=True,
+            timeout=30
+        )
+
+        # Check for new cookies after each step
+        cookies_after_registration = dict(session.cookies)
+        new_from_registration = {k: v for k, v in cookies_after_registration.items()
+                               if k not in original_cookies or original_cookies[k] != v}
+
+        if new_from_registration:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Got new cookies from registration: {list(new_from_registration.keys())}")
+
+        # Try the main Banner entry point (potential SSO refresh)
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Trying main Banner entry point...")
+        banner_response = session.get(
+            'https://banner.usask.ca/StudentRegistrationSsb/',
+            allow_redirects=True,
+            timeout=30
+        )
+
+        # Try accessing the menu/home page that might trigger auth refresh
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Trying Banner menu...")
+        session.get(
+            'https://banner.usask.ca/StudentRegistrationSsb/ssb/classRegistration/classRegistration',
+            allow_redirects=True,
+            timeout=30
+        )
+
+        # Try the term search endpoint which might refresh session
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Trying term search...")
+        current_year = datetime.now().year
+        current_month = datetime.now().month
+
+        # Determine current or next term
+        if current_month >= 9:  # September or later = Fall term
+            term_code = f"{current_year}09"
+        elif current_month >= 5:  # May or later = Summer term
+            term_code = f"{current_year}07"
+        elif current_month >= 1:  # January or later = Winter term
+            term_code = f"{current_year}01"
+        else:
+            term_code = f"{current_year-1}09"  # Fall of previous year
+
+        session.post(
+            'https://banner.usask.ca/StudentRegistrationSsb/ssb/term/search',
+            params={'mode': 'registration'},
+            data={'term': term_code},
+            allow_redirects=True,
+            timeout=30
+        )
+
+        # Check final cookie state
+        final_cookies = dict(session.cookies)
+        all_updated_cookies = {k: v for k, v in final_cookies.items()
+                             if k not in original_cookies or original_cookies[k] != v}
+
+        if all_updated_cookies:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Successfully refreshed cookies! Updated: {list(all_updated_cookies.keys())}")
+            for cookie_name, cookie_value in all_updated_cookies.items():
+                print(f"[{datetime.now().strftime('%H:%M:%S')}]   {cookie_name}: {cookie_value[:20]}...")
+
+            # Save updated cookies
+            save_data()
+        else:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] No new cookies received during refresh")
+
+        last_cookie_refresh = time.time()
+
+        # Test if the refresh worked by making a simple API call
+        test_response = session.get(
+            'https://banner.usask.ca/StudentRegistrationSsb/ssb/classRegistration/classRegistration',
+            timeout=10
+        )
+
+        if test_response.status_code == 200:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Cookie refresh verification: SUCCESS")
+            return True
+        else:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Cookie refresh verification: FAILED (status {test_response.status_code})")
+            return False
+
+    except Exception as e:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Error refreshing session cookies: {e}")
+        return False
+
+def should_refresh_cookies():
+    """Determine if cookies should be refreshed"""
+    return time.time() - last_cookie_refresh > COOKIE_REFRESH_INTERVAL
+
+def make_authenticated_request(method: str, url: str, **kwargs) -> requests.Response:
+    """Make a request with automatic cookie refresh if needed"""
+    global session
+
+    # Refresh cookies if it's been a while
+    if should_refresh_cookies():
+        refresh_session_cookies()
+
+    # Make the request
+    response = session.request(method, url, **kwargs)
+
+    # If we get auth errors, try refreshing cookies once
+    if response.status_code in [401, 403]:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Auth error (status {response.status_code}), attempting cookie refresh...")
+        if refresh_session_cookies():
+            # Retry the request with fresh cookies
+            response = session.request(method, url, **kwargs)
+
+    return response
+
 # Bot setup
 intents = discord.Intents.default()
 intents.message_content = True
@@ -46,16 +184,33 @@ def load_data():
     global guild_data
     try:
         with open('bot_data.json', 'r') as f:
-            guild_data = json.load(f)
-            # Convert string keys back to int for guild_ids
-            guild_data = {int(k): v for k, v in guild_data.items()}
+            data = json.load(f)
+
+            # Handle both old format (just guild_data) and new format (structured data)
+            if 'guilds' in data:
+                # New structured format
+                guild_data = {int(k): v for k, v in data['guilds'].items()}
+
+                # Load cookies if they exist
+                if 'cookies' in data:
+                    session.cookies.update(data['cookies'])
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Loaded {len(data['cookies'])} saved cookies")
+            else:
+                # Old format - just guild_data
+                guild_data = {int(k): v for k, v in data.items()}
+
     except FileNotFoundError:
         guild_data = {}
 
 def save_data():
     """Save data to file"""
+    data = {
+        'guilds': guild_data,
+        'cookies': dict(session.cookies),
+        'last_updated': datetime.now().isoformat()
+    }
     with open('bot_data.json', 'w') as f:
-        json.dump(guild_data, f, indent=2)
+        json.dump(data, f, indent=2)
 
 def check_class_seats(subject: str, course_number: str, year: str, term: str, crn: str) -> int:
     """Check available seats for a specific class"""
@@ -81,27 +236,24 @@ def check_class_seats(subject: str, course_number: str, year: str, term: str, cr
         }
 
         # Put user into search mode for the correct term
-        requests.post(
+        make_authenticated_request(
+            'POST',
             'https://banner.usask.ca/StudentRegistrationSsb/ssb/term/search',
             params={'mode': 'registration'},
-            cookies=CLASS_REGISTRAR_COOKIES,
-            headers=HEADERS,
             data=data,
         )
 
         # Reset the search form
-        requests.post(
+        make_authenticated_request(
+            'POST',
             'https://banner.usask.ca/StudentRegistrationSsb/ssb/classSearch/resetDataForm',
-            cookies=CLASS_REGISTRAR_COOKIES,
-            headers=HEADERS,
         )
 
         # Get the search results
-        response = requests.get(
+        response = make_authenticated_request(
+            'GET',
             'https://banner.usask.ca/StudentRegistrationSsb/ssb/searchResults/searchResults',
             params=params,
-            cookies=CLASS_REGISTRAR_COOKIES,
-            headers=HEADERS,
         )
 
         if response.status_code == 200:
@@ -112,6 +264,7 @@ def check_class_seats(subject: str, course_number: str, year: str, term: str, cr
                     return int(item['seatsAvailable'])
             return -1  # Class not found
         else:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] HTTP {response.status_code} when checking seats for {crn}")
             return -2  # Request failed
     except Exception as e:
         print(f"Error checking seats for {crn}: {e}")
@@ -120,6 +273,7 @@ def check_class_seats(subject: str, course_number: str, year: str, term: str, cr
 @bot.event
 async def on_ready():
     print(f'{bot.user} has logged in!')
+    initialize_session()
     load_data()
     seat_checker.start()
 
@@ -127,7 +281,7 @@ async def on_ready():
 async def help_command(ctx):
     """Show help for all available commands"""
     embed = discord.Embed(
-        title="🤖 Class Notifier Bot - Help",
+        title="Class Notifier Bot - Help",
         description="Monitor University of Saskatchewan class seat availability",
         color=0x0c6b41
     )
@@ -172,9 +326,26 @@ async def help_command(ctx):
     )
 
     embed.add_field(
+        name="cn!cookies",
+        value="Show session cookie status (Admin only)\n"
+              "• Shows active cookies and refresh times\n"
+              "• Requires 'Manage Channels' permission",
+        inline=False
+    )
+
+    embed.add_field(
+        name="cn!refresh",
+        value="Manually refresh session cookies (Admin only)\n"
+              "• Forces immediate cookie refresh\n"
+              "• Requires 'Manage Channels' permission",
+        inline=False
+    )
+
+    embed.add_field(
         name="📋 How it works",
         value="• Bot checks all classes every 20 seconds\n"
               "• Notifications sent when seats go from 0 → available\n"
+              "• Automatic cookie refresh every 5 minutes\n"
               "• Each Discord server has independent monitoring",
         inline=False
     )
@@ -316,20 +487,74 @@ async def status(ctx):
 
     await ctx.send(embed=embed)
 
+@bot.command(name='cookies')
+@commands.has_permissions(manage_channels=True)
+async def cookie_status(ctx):
+    """Show current cookie status and allow manual refresh"""
+    global session, last_cookie_refresh
+
+    embed = discord.Embed(title="🍪 Cookie Status", color=0x0c6b41)
+
+    # Show current cookies
+    current_cookies = dict(session.cookies)
+    cookie_names = list(current_cookies.keys())
+
+    embed.add_field(
+        name="Active Cookies",
+        value=f"```{', '.join(cookie_names) if cookie_names else 'None'}```",
+        inline=False
+    )
+
+    # Show last refresh time
+    if last_cookie_refresh > 0:
+        last_refresh = datetime.fromtimestamp(last_cookie_refresh)
+        embed.add_field(
+            name="Last Refresh",
+            value=f"{last_refresh.strftime('%Y-%m-%d %H:%M:%S')}",
+            inline=True
+        )
+    else:
+        embed.add_field(
+            name="Last Refresh",
+            value="Never",
+            inline=True
+        )
+
+    # Show next scheduled refresh
+    next_refresh = datetime.fromtimestamp(last_cookie_refresh + COOKIE_REFRESH_INTERVAL)
+    embed.add_field(
+        name="Next Auto-Refresh",
+        value=f"{next_refresh.strftime('%Y-%m-%d %H:%M:%S')}",
+        inline=True
+    )
+
+    embed.add_field(
+        name="Manual Refresh",
+        value="Use `cn!refresh` to manually refresh cookies now\nCookies are saved in bot_data.json",
+        inline=False
+    )
+
+    await ctx.send(embed=embed)
+
+@bot.command(name='refresh')
+@commands.has_permissions(manage_channels=True)
+async def manual_refresh(ctx):
+    """Manually refresh session cookies"""
+    await ctx.send("🔄 Attempting to refresh cookies...")
+
+    success = refresh_session_cookies()
+
+    if success:
+        await ctx.send("✅ Cookie refresh completed! Check `cn!cookies` for updated status.")
+    else:
+        await ctx.send("❌ Cookie refresh failed. Check bot logs for details.")
+
 @tasks.loop(seconds=20)
 async def seat_checker():
     """Background task to check seats every 20 seconds"""
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Checking seats...")
 
-    # Keep JSESSIONID active
-    try:
-        requests.get(
-            'https://banner.usask.ca/StudentRegistrationSsb/ssb/registration',
-            cookies=CLASS_REGISTRAR_COOKIES,
-            headers=HEADERS,
-        )
-    except Exception as e:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Error keeping session active: {e}")
+    # Session keep-alive and cookie refresh is now handled automatically in make_authenticated_request()
 
     for guild_id, guild_info in guild_data.items():
         # Get notification channel for this guild

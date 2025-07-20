@@ -4,4 +4,5 @@ CLASS_REGISTRAR_COOKIES = {
     'JSESSIONID': '',
     'BIGipServer~BannerXE~studentregistrationssb-pool': '',
     'BIGipServer~BannerXE~BannerExtensibilityProd': '',
+    'BIGipServer~BannerXE~applicationNavigatorProd': '',
 }
