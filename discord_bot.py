@@ -131,7 +131,7 @@ async def help_command(ctx):
         description="Monitor University of Saskatchewan class seat availability",
         color=0x0c6b41
     )
-    
+
     embed.add_field(
         name="cn!setchannel [#channel]",
         value="**REQUIRED FIRST STEP**: Set notification channel\n"
@@ -140,7 +140,7 @@ async def help_command(ctx):
               "• Example: `cn!setchannel #class-alerts`",
         inline=False
     )
-    
+
     embed.add_field(
         name="cn!add CRN SUBJECT COURSE_NUMBER YEAR TERM",
         value="Add a class to monitoring list\n"
@@ -149,14 +149,14 @@ async def help_command(ctx):
               "• Valid terms: FALL, WINTER, SPRING, SUMMER",
         inline=False
     )
-    
+
     embed.add_field(
         name="cn!remove CRN",
         value="Stop monitoring a class\n"
               "• Example: `cn!remove 12345`",
         inline=False
     )
-    
+
     embed.add_field(
         name="cn!status",
         value="Show all monitored classes and seat counts\n"
@@ -164,13 +164,13 @@ async def help_command(ctx):
               "• Shows number of users watching each class",
         inline=False
     )
-    
+
     embed.add_field(
         name="cn!help",
         value="Show this help message",
         inline=False
     )
-    
+
     embed.add_field(
         name="📋 How it works",
         value="• Bot checks all classes every 20 seconds\n"
@@ -178,9 +178,9 @@ async def help_command(ctx):
               "• Each Discord server has independent monitoring",
         inline=False
     )
-    
+
     embed.set_footer(text="University of Saskatchewan Class Monitor")
-    
+
     await ctx.send(embed=embed)
 
 @bot.command(name='add')
@@ -188,16 +188,16 @@ async def add_class(ctx, crn: str, subject: str, course_number: str, year: str, 
     """Add a class to be monitored"""
     guild_id = ctx.guild.id
     user_id = ctx.author.id
-    
+
     # Validate term
     if term.upper() not in TERMS:
         await ctx.send(f"Invalid term '{term}'. Valid terms are: {', '.join(TERMS.keys())}")
         return
-    
+
     # Initialize guild data if needed
     if guild_id not in guild_data:
         guild_data[guild_id] = {}
-    
+
     # Initialize class data if needed
     if crn not in guild_data[guild_id]:
         guild_data[guild_id][crn] = {
@@ -208,13 +208,13 @@ async def add_class(ctx, crn: str, subject: str, course_number: str, year: str, 
             'users_to_notify': [],
             'last_available_seats': None
         }
-    
+
     # Add user to notification list if not already there
     if user_id not in guild_data[guild_id][crn]['users_to_notify']:
         guild_data[guild_id][crn]['users_to_notify'].append(user_id)
-    
+
     save_data()
-    
+
     class_info = guild_data[guild_id][crn]
     await ctx.send(f"✅ Added {class_info['subject']} {class_info['course_number']} (CRN: {crn}) for {class_info['term']} {class_info['year']}. You'll be notified when seats become available!")
 
@@ -222,15 +222,15 @@ async def add_class(ctx, crn: str, subject: str, course_number: str, year: str, 
 async def remove_class(ctx, crn: str):
     """Remove a class from monitoring"""
     guild_id = ctx.guild.id
-    
+
     if guild_id not in guild_data or crn not in guild_data[guild_id]:
         await ctx.send(f"❌ CRN {crn} is not being monitored in this server.")
         return
-    
+
     class_info = guild_data[guild_id][crn]
     del guild_data[guild_id][crn]
     save_data()
-    
+
     await ctx.send(f"✅ Removed {class_info['subject']} {class_info['course_number']} (CRN: {crn}) from monitoring.")
 
 @bot.command(name='setchannel')
@@ -238,19 +238,19 @@ async def remove_class(ctx, crn: str):
 async def set_notify_channel(ctx, channel: discord.TextChannel = None):
     """Set the channel where seat availability notifications will be sent"""
     guild_id = ctx.guild.id
-    
+
     # Use current channel if no channel specified
     if channel is None:
         channel = ctx.channel
-    
+
     # Initialize guild data if needed
     if guild_id not in guild_data:
         guild_data[guild_id] = {}
-    
+
     # Store the notification channel ID
     guild_data[guild_id]['notify_channel_id'] = channel.id
     save_data()
-    
+
     await ctx.send(f"✅ Notification channel set to {channel.mention}. All seat availability notifications will be sent here.")
 
 @set_notify_channel.error
@@ -262,26 +262,26 @@ async def set_notify_channel_error(ctx, error):
 async def status(ctx):
     """Show status of all monitored classes"""
     guild_id = ctx.guild.id
-    
+
     if guild_id not in guild_data:
         await ctx.send("📋 No classes are currently being monitored in this server.")
         return
-    
+
     # Check if notification channel is set
     notify_channel_id = guild_data[guild_id].get('notify_channel_id')
     notify_channel = None
     if notify_channel_id:
         notify_channel = bot.get_channel(notify_channel_id)
-    
+
     # Filter out non-class data (like notify_channel_id)
     classes = {crn: info for crn, info in guild_data[guild_id].items() if crn != 'notify_channel_id'}
-    
+
     if not classes:
         await ctx.send("📋 No classes are currently being monitored in this server.")
         return
-    
+
     embed = discord.Embed(title="📚 Class Monitoring Status", color=0x0c6b41)
-    
+
     # Add notification channel info
     if notify_channel:
         embed.add_field(
@@ -295,7 +295,7 @@ async def status(ctx):
             value="Not set! Use `cn!setchannel` to set where notifications will be sent.",
             inline=False
         )
-    
+
     for crn, class_info in classes.items():
         subject = class_info['subject']
         course_number = class_info['course_number']
@@ -303,24 +303,24 @@ async def status(ctx):
         term = class_info['term']
         users_count = len(class_info['users_to_notify'])
         last_seats = class_info.get('last_available_seats', 'Unknown')
-        
+
         status_text = f"**Term:** {term} {year}\n"
         status_text += f"**Users watching:** {users_count}\n"
         status_text += f"**Available seats:** {last_seats if last_seats is not None else 'Checking...'}"
-        
+
         embed.add_field(
             name=f"{subject} {course_number} (CRN: {crn})",
             value=status_text,
             inline=True
         )
-    
+
     await ctx.send(embed=embed)
 
 @tasks.loop(seconds=20)
 async def seat_checker():
     """Background task to check seats every 20 seconds"""
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Checking seats...")
-    
+
     # Keep JSESSIONID active
     try:
         requests.get(
@@ -336,14 +336,14 @@ async def seat_checker():
         notify_channel_id = guild_info.get('notify_channel_id')
         if not notify_channel_id:
             continue  # Skip if no notification channel set
-        
+
         notify_channel = bot.get_channel(notify_channel_id)
         if not notify_channel:
             continue  # Skip if channel no longer exists
-        
+
         # Filter out non-class data (like notify_channel_id)
         classes = {crn: info for crn, info in guild_info.items() if crn != 'notify_channel_id'}
-        
+
         for crn, class_info in classes.items():
             # Check available seats
             available_seats = check_class_seats(
@@ -353,11 +353,11 @@ async def seat_checker():
                 class_info['term'],
                 crn
             )
-            
+
             # Update last known seat count
             previous_seats = class_info.get('last_available_seats')
             class_info['last_available_seats'] = available_seats
-            
+
             # If seats became available (changed from 0 to >0), notify users
             if available_seats > 0 and (previous_seats == 0 or previous_seats is None):
                 # Create notification message
@@ -366,7 +366,7 @@ async def seat_checker():
                     user = bot.get_user(user_id)
                     if user:
                         user_mentions.append(user.mention)
-                
+
                 if user_mentions:
                     embed = discord.Embed(
                         title="🎉 Seats Available!",
@@ -375,10 +375,10 @@ async def seat_checker():
                     )
                     embed.add_field(name="Available Seats", value=str(available_seats), inline=True)
                     embed.add_field(name="Term", value=f"{class_info['term']} {class_info['year']}", inline=True)
-                    
+
                     mentions_text = " ".join(user_mentions)
                     await notify_channel.send(content=mentions_text, embed=embed)
-    
+
     # Save data periodically
     save_data()
 
@@ -389,4 +389,4 @@ async def before_seat_checker():
 # Run the bot
 if __name__ == "__main__":
     # You need to replace 'YOUR_BOT_TOKEN' with your actual Discord bot token
-    bot.run(BOT_TOKEN) 
+    bot.run(BOT_TOKEN)
