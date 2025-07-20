@@ -729,11 +729,7 @@ async def seat_checker():
                     # Create notification message
                     user_mentions = []
                     for user_id in class_info['users_to_notify']:
-                        user = bot.get_user(user_id)
-                        if user:
-                            user_mentions.append(user.mention)
-                        else:
-                            print(f"[{datetime.now().strftime('%H:%M:%S')}] Warning: Could not find user {user_id}")
+                        user_mentions.append(f"<@{user_id}>")
 
                     if user_mentions:
                         try:
